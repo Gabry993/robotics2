@@ -6,7 +6,7 @@ import numpy as np
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Range
-from math import cos, sin, asin, tan, atan2, radians
+from math import cos, sin, asin, tan, atan2, radians, atan
 # msgs and srv for working with the set_model_service
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
@@ -17,7 +17,7 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 distance_tolerance = 0.5
-angle_tolerance = 0.034906585
+angle_tolerance = 0.03876548
 max_speed= 0.2
 vel_P = 1
 vel_I = 0
@@ -81,6 +81,7 @@ class BasicThymio:
     prox_sensors_turning = {'thymio14/proximity_right_link': R, 'thymio14/proximity_center_right_link': R, 'thymio14/proximity_center_link': R, 'thymio14/proximity_left_link': L, 'thymio14/proximity_center_left_link': L}
     prox_sensors_angle = {'thymio14/proximity_right_link': 40, 'thymio14/proximity_center_right_link': 20, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 40, 'thymio14/proximity_center_left_link': 20}
     prox_sensors_counter = {'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
+    prox_sensors_pointed = {'thymio14/proximity_right_link': False, 'thymio14/proximity_center_right_link': False, 'thymio14/proximity_center_link': False, 'thymio14/proximity_left_link': False, 'thymio14/proximity_center_left_link': False}
 
     def __init__(self, thymio_name):
         """init"""
@@ -118,6 +119,8 @@ class BasicThymio:
         self.state = WALKING
         self.turn = FORWARD
         self.angle = 0
+        self.pointed = False
+        self.wall_points = []
 
     def check_transition(self, data):
         if data.range < 0.08 and self.state == WALKING:
@@ -128,8 +131,13 @@ class BasicThymio:
                 rospy.loginfo(data)
             else:
                 self.prox_sensors_counter[data.header.frame_id] +=1
-        elif self.prox_sensors_counter[data.header.frame_id]>0:
+        elif self.prox_sensors_counter[data.header.frame_id]>0 and self.state == WALKING:
              self.prox_sensors_counter[data.header.frame_id] -=1
+        elif self.state == POINTING and self.prox_sensors_turning[data.header.frame_id] == self.turn and not self.prox_sensors_pointed[data.header.frame_id]:
+            self.wall_points.append((data.range*cos(radians(self.prox_sensors_angle[data.header.frame_id]))*self.prox_sensors_turning[data.header.frame_id], data.range*sin(radians(self.prox_sensors_angle[data.header.frame_id]))*self.prox_sensors_turning[data.header.frame_id]))
+            self.prox_sensors_pointed[data.header.frame_id] = True
+            rospy.loginfo(data)
+
 
 
 
@@ -242,6 +250,15 @@ class BasicThymio:
             vel_msg.angular.z =0
             self.velocity_publisher.publish(vel_msg)
             self.move2angle()
+            self.state = POINTING
+
+        while self.state == POINTING:
+            if len(self.wall_points) == 2:
+                m = self.wall_points[0][1]-self.wall_points[1][1]/self.wall_points[0][0]-self.wall_points[1][0]
+                m = -1/m
+                self.angle = atan(m)
+                self.move2angle()
+
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])
