@@ -5,6 +5,7 @@ import sys
 import numpy as np
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Range
 from math import cos, sin, asin, tan, atan2, radians
 # msgs and srv for working with the set_model_service
 from gazebo_msgs.msg import ModelState
@@ -16,6 +17,7 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 distance_tolerance = 0.5
+angle_tolerance = 0.034906585
 max_speed= 0.2
 vel_P = 1
 vel_I = 0
@@ -24,6 +26,20 @@ vel_D = 0
 ang_P = 2
 ang_I = 0
 ang_D = 0
+
+
+
+"""
+Aux variables for the three states of the angry turtle
+"""
+WALKING = W = 0
+TURNING = T = 1
+POINTING = P = 2
+
+FORWARD = F = 0
+LEFT = L = 1
+RIGHT =R =-1
+
 
 """
 Useful class to implement a PID controller (as seen in class)
@@ -61,6 +77,11 @@ class BasicThymio:
 
     #usi_moves = np.array([(3, 3), (7, 3), (11, 1), (15, -3), (18, -3), (20, -1), (20, 1), (18, 3), (15, 3), (11, -1), (7, -3), (3, -3), (0, 0)])/5.0
     #usi_moves = [(0.3, 0)]
+
+    prox_sensors_turning = {'thymio14/proximity_right_link': R, 'thymio14/proximity_center_right_link': R, 'thymio14/proximity_center_link': R, 'thymio14/proximity_left_link': L, 'thymio14/proximity_center_left_link': L}
+    prox_sensors_angle = {'thymio14/proximity_right_link': 40, 'thymio14/proximity_center_right_link': 20, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 40, 'thymio14/proximity_center_left_link': 20}
+    prox_sensors_counter = {'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
+
     def __init__(self, thymio_name):
         """init"""
         self.thymio_name = thymio_name
@@ -75,6 +96,13 @@ class BasicThymio:
         self.pose_subscriber = rospy.Subscriber(self.thymio_name + '/odom',
                                                 Odometry, self.update_state)
 
+        #Subscriber to frontal proximity sensors
+        #self.prox_c = rospy.Subscriber(self.thymio_name + '/proximity/center', Range, self.check_transition)
+        self.prox_cl = rospy.Subscriber(self.thymio_name + '/proximity/center_left', Range, self.check_transition)
+        self.prox_l = rospy.Subscriber(self.thymio_name + '/proximity/left', Range, self.check_transition)
+        self.prox_cr = rospy.Subscriber(self.thymio_name + '/proximity/center_right', Range, self.check_transition)
+        self.prox_r = rospy.Subscriber(self.thymio_name + '/proximity/right', Range, self.check_transition)
+
         self.current_pose = Pose()
         self.yaw = 0
         self.current_twist = Twist()
@@ -87,7 +115,23 @@ class BasicThymio:
         #High P for the angular vel makes the turtle turning faster and writing USI simpler
         self.angle_controller = PID(ang_P, ang_I, ang_D)
         self.dt = 1.0/self.hz
-        self.usi_moves_idx = 0
+        self.state = WALKING
+        self.turn = FORWARD
+        self.angle = 0
+
+    def check_transition(self, data):
+        if data.range < 0.08 and self.state == WALKING:
+            if self.prox_sensors_counter[data.header.frame_id]>3:
+                self.turn = self.prox_sensors_turning[data.header.frame_id]
+                self.state = TURNING
+                self.angle = radians(self.prox_sensors_angle[data.header.frame_id])
+                rospy.loginfo(data)
+            else:
+                self.prox_sensors_counter[data.header.frame_id] +=1
+        elif self.prox_sensors_counter[data.header.frame_id]>0:
+             self.prox_sensors_counter[data.header.frame_id] -=1
+
+
 
     def thymio_state_service_request(self, position, orientation):
         """Request the service (set thymio state values) exposed by
@@ -139,7 +183,7 @@ class BasicThymio:
         #distance_tolerance = 0.2
         vel_msg = Twist()
 
-        while self.get_distance(goal_pose.position.x, goal_pose.position.y) >= distance_tolerance:
+        while self.get_distance(goal_pose.position.x, goal_pose.position.y) >= angle_tolerance:
 
             #Porportional Controller
             #linear velocity in the x-axis:
@@ -161,36 +205,43 @@ class BasicThymio:
         vel_msg.angular.z =0
         self.velocity_publisher.publish(vel_msg)
 
-    def basic_move(self):
-        """Moves the migthy thymio"""
+    def move2angle(self):
         vel_msg = Twist()
-        vel_msg.linear.x = 0.2 # m/s
-        vel_msg.angular.z = 0. # rad/s
 
-        while not rospy.is_shutdown():
-            # Publishing thymo vel_msg
+        while angle_difference(self.angle, self.yaw) >= angle_tolerance:
+
+            #Porportional Controller
+            #linear velocity in the x-axis: 
+            vel_msg.linear.x = 0
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+
+            #angular velocity in the z-axis:
+            vel_msg.angular.x = 0
+            vel_msg.angular.y = 0
+            vel_msg.angular.z = self.turn*self.angle_controller.step(angle_difference(self.angle, self.yaw), self.dt)
+
+            #Publishing our vel_msg
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+        #Stopping our robot after the movement is over
+        vel_msg.linear.x = 0
+        vel_msg.angular.z =0
+        self.velocity_publisher.publish(vel_msg)
+
+    def run_thymio(self):
+        vel_msg = Twist()
+        vel_msg.linear.x = 0.1 # m/s
+        vel_msg.angular.z = 0. # rad/s
+        while self.state == WALKING and  not rospy.is_shutdown():
             self.velocity_publisher.publish(vel_msg)
             # .. at the desired rate.
             self.rate.sleep()
-
-        # Stop thymio. With is_shutdown condition we do not reach this point.
-        #vel_msg.linear.x = 0.
-        #vel_msg.angular.z = 0.
-        #self.velocity_publisher.publish(vel_msg)
-
-        # waiting until shutdown flag (e.g. ctrl+c)
-        rospy.spin()
-
-    def run_gigi(self):
-        t=-90
-        while t<1000:
-            rad = radians(t)
-            scale = 2 / (3 - cos(2*rad));
-            x = 3*scale * cos(rad);
-            y = 3*scale * sin(2*rad) / 2;
-            rospy.loginfo("(x, y): (%.5f, %.5f) " % (x, y))
-            self.move2goal((x, y))
-            t+=1
+        if self.state == TURNING:
+            vel_msg.linear.x = 0
+            vel_msg.angular.z =0
+            self.velocity_publisher.publish(vel_msg)
+            self.move2angle()
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])
@@ -220,6 +271,6 @@ if __name__ == '__main__':
 
     #thymio.basic_move()
     while not rospy.is_shutdown():
-        thymio.run_gigi()
+        thymio.run_thymio()
         
 
