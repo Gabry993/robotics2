@@ -151,7 +151,7 @@ class BasicThymio:
             #angular velocity in the z-axis:
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = self.angle_controller.step(angle_difference(atan2(goal_pose.position.y - self.current_pose.position.y, goal_pose.position.x - self.current_pose.position.x), self.yaw), self.dt)
+            vel_msg.angular.z = np.clip(self.angle_controller.step(angle_difference(atan2(goal_pose.position.y - self.current_pose.position.y, goal_pose.position.x - self.current_pose.position.x), self.yaw), self.dt), 0.0, 1.5)
 
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
@@ -190,7 +190,7 @@ class BasicThymio:
             y = 3*scale * sin(2*rad) / 2;
             rospy.loginfo("(x, y): (%.5f, %.5f) " % (x, y))
             self.move2goal((x, y))
-            t+=1
+            t+=10
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])

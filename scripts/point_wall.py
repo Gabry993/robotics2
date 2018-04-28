@@ -38,7 +38,7 @@ POINTING = P = 2
 
 FORWARD = F = 0
 LEFT = L = 1
-RIGHT =R =-1
+RIGHT = R =-1
 
 
 """
@@ -128,7 +128,7 @@ class BasicThymio:
                 self.turn = self.prox_sensors_turning[data.header.frame_id]
                 self.state = TURNING
                 self.angle = radians(self.prox_sensors_angle[data.header.frame_id])
-                rospy.loginfo(data)
+                rospy.loginfo(self.angle)
             else:
                 self.prox_sensors_counter[data.header.frame_id] +=1
         elif self.prox_sensors_counter[data.header.frame_id]>0 and self.state == WALKING:
@@ -191,7 +191,7 @@ class BasicThymio:
         #distance_tolerance = 0.2
         vel_msg = Twist()
 
-        while self.get_distance(goal_pose.position.x, goal_pose.position.y) >= angle_tolerance:
+        while self.get_distance(goal_pose.position.x, goal_pose.position.y) >= distance_tolerance:
 
             #Porportional Controller
             #linear velocity in the x-axis:
@@ -216,7 +216,7 @@ class BasicThymio:
     def move2angle(self):
         vel_msg = Twist()
 
-        while angle_difference(self.angle, self.yaw) >= angle_tolerance:
+        while np.abs(angle_difference(self.angle, self.yaw)) >= angle_tolerance:
 
             #Porportional Controller
             #linear velocity in the x-axis: 
@@ -227,7 +227,7 @@ class BasicThymio:
             #angular velocity in the z-axis:
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = self.turn*self.angle_controller.step(angle_difference(self.angle, self.yaw), self.dt)
+            vel_msg.angular.z = self.angle_controller.step(angle_difference(self.angle, self.yaw), self.dt)
 
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
@@ -250,14 +250,20 @@ class BasicThymio:
             vel_msg.angular.z =0
             self.velocity_publisher.publish(vel_msg)
             self.move2angle()
-            self.state = POINTING
+            self.state = 15
 
         while self.state == POINTING:
             if len(self.wall_points) == 2:
-                m = self.wall_points[0][1]-self.wall_points[1][1]/self.wall_points[0][0]-self.wall_points[1][0]
+                x = self.wall_points[0][0]-self.wall_points[1][0]
+                y = self.wall_points[0][1]-self.wall_points[1][1]
+                m = y/x
                 m = -1/m
                 self.angle = atan(m)
+                if self.turn == R:
+                    self.angle = self.angle +np.pi
+                rospy.loginfo(self.angle)
                 self.move2angle()
+                self.state= 15
 
         '''
         while self.usi_moves_idx<len(self.usi_moves):
@@ -289,5 +295,6 @@ if __name__ == '__main__':
     #thymio.basic_move()
     while not rospy.is_shutdown():
         thymio.run_thymio()
+        sys.exit(1)
         
 
