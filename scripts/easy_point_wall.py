@@ -17,12 +17,13 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 distance_tolerance = 0.5
-angle_tolerance = 0.03876548
 tolerance= 0.01
-max_speed= 0.2
+
+max_linear_speed= 0.2
 vel_P = 1
 vel_I = 0
 vel_D = 0
+
 
 ang_P = 2
 ang_I = 0
@@ -38,11 +39,7 @@ Aux variables for the three states of the angry turtle
 """
 WALKING = W = 0
 TURNING = T = 1
-POINTING = P = 2
-
-FORWARD = F = 0
-LEFT = L = 1
-RIGHT = R =-1
+POINTED = P = 2
 
 
 """
@@ -79,12 +76,6 @@ def angle_difference(angle1, angle2):
 
 class BasicThymio:
 
-    #usi_moves = np.array([(3, 3), (7, 3), (11, 1), (15, -3), (18, -3), (20, -1), (20, 1), (18, 3), (15, 3), (11, -1), (7, -3), (3, -3), (0, 0)])/5.0
-    #usi_moves = [(0.3, 0)]
-
-    prox_sensors_turning = {'thymio14/proximity_right_link': R, 'thymio14/proximity_center_right_link': R, 'thymio14/proximity_center_link': R, 'thymio14/proximity_left_link': L, 'thymio14/proximity_center_left_link': L}
-    prox_sensors_angle = {'thymio14/proximity_right_link': 40, 'thymio14/proximity_center_right_link': 20, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 40, 'thymio14/proximity_center_left_link': 20}
-    prox_sensors_counter = {'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
     prox_sensors_measure = {'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
 
     def __init__(self, thymio_name):
@@ -122,10 +113,6 @@ class BasicThymio:
         self.pointer_controller = PID(point_P, point_I, point_D)
         self.dt = 1.0/self.hz
         self.state = WALKING
-        self.turn = FORWARD
-        self.angle = 0
-        self.pointed = False
-        self.wall_points = []
 
     def check_transition(self, data):
         self.prox_sensors_measure[data.header.frame_id]= data.range
@@ -187,7 +174,7 @@ class BasicThymio:
             #Porportional Controller
             #linear velocity in the x-axis:
             dist_error = self.get_distance(goal_pose.position.x, goal_pose.position.y) 
-            vel_msg.linear.x = np.clip(self.vel_controller.step(dist_error, self.dt), 0.0, max_speed)
+            vel_msg.linear.x = np.clip(self.vel_controller.step(dist_error, self.dt), 0.0, max_linear_speed)
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
 
@@ -222,31 +209,7 @@ class BasicThymio:
         vel_msg.linear.x = 0
         vel_msg.angular.z =0
         self.velocity_publisher.publish(vel_msg)
-        rospy.loginfo('END')
 
-    def move2angle(self):
-        vel_msg = Twist()
-
-        while np.abs(angle_difference(self.angle, self.yaw)) >= angle_tolerance:
-
-            #Porportional Controller
-            #linear velocity in the x-axis: 
-            vel_msg.linear.x = 0
-            vel_msg.linear.y = 0
-            vel_msg.linear.z = 0
-
-            #angular velocity in the z-axis:
-            vel_msg.angular.x = 0
-            vel_msg.angular.y = 0
-            vel_msg.angular.z = self.angle_controller.step(angle_difference(self.angle, self.yaw), self.dt)
-
-            #Publishing our vel_msg
-            self.velocity_publisher.publish(vel_msg)
-            self.rate.sleep()
-        #Stopping our robot after the movement is over
-        vel_msg.linear.x = 0
-        vel_msg.angular.z =0
-        self.velocity_publisher.publish(vel_msg)
 
     def run_thymio(self):
         vel_msg = Twist()
@@ -261,20 +224,7 @@ class BasicThymio:
             vel_msg.angular.z =0
             self.velocity_publisher.publish(vel_msg)
             self.point_wall()
-            self.state = 15
-
-        while self.state == POINTING:
-            if len(self.wall_points) == 2:
-                x = self.wall_points[0][0]-self.wall_points[1][0]
-                y = self.wall_points[0][1]-self.wall_points[1][1]
-                m = y/x
-                m = -1/m
-                self.angle = atan(m)
-                if self.turn == R:
-                    self.angle = self.angle +np.pi
-                rospy.loginfo(self.angle)
-                self.move2angle()
-                self.state= 15
+            self.state = POINTED
 
         '''
         while self.usi_moves_idx<len(self.usi_moves):
@@ -282,7 +232,7 @@ class BasicThymio:
                 self.usi_moves_idx +=1'''
 
 def usage():
-    return "Wrong number of parameters. basic_move.py [thymio_name]"
+    return "Wrong number of parameters. easy_point_wall.py [thymio_name]"
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:

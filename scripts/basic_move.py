@@ -16,11 +16,12 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 distance_tolerance = 0.5
-max_speed= 0.2
+max_linear_speed= 0.2
 vel_P = 1
 vel_I = 0
 vel_D = 0
 
+max_angular_speed = 1.5
 ang_P = 2
 ang_I = 0
 ang_D = 0
@@ -144,14 +145,14 @@ class BasicThymio:
             #Porportional Controller
             #linear velocity in the x-axis:
             dist_error = self.get_distance(goal_pose.position.x, goal_pose.position.y) 
-            vel_msg.linear.x = np.clip(self.vel_controller.step(dist_error, self.dt), 0.0, max_speed)
+            vel_msg.linear.x = np.clip(self.vel_controller.step(dist_error, self.dt), 0.0, max_linear_speed)
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
 
             #angular velocity in the z-axis:
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = np.clip(self.angle_controller.step(angle_difference(atan2(goal_pose.position.y - self.current_pose.position.y, goal_pose.position.x - self.current_pose.position.x), self.yaw), self.dt), 0.0, 1.5)
+            vel_msg.angular.z = np.clip(self.angle_controller.step(angle_difference(atan2(goal_pose.position.y - self.current_pose.position.y, goal_pose.position.x - self.current_pose.position.x), self.yaw), self.dt), -max_angular_speed, max_angular_speed)
 
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
@@ -181,7 +182,7 @@ class BasicThymio:
         # waiting until shutdown flag (e.g. ctrl+c)
         rospy.spin()
 
-    def run_gigi(self):
+    def run_thymio(self):
         t=-90
         while t<1000:
             rad = radians(t)
@@ -220,6 +221,6 @@ if __name__ == '__main__':
 
     #thymio.basic_move()
     while not rospy.is_shutdown():
-        thymio.run_gigi()
+        thymio.run_thymio()
         
 
