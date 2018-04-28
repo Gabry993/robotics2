@@ -12,7 +12,7 @@
 
     <model name='wall'>
       <static>true</static>
-      <pose frame=''>1.943579 0.694777 0.5 0 -0 -0.616289</pose>
+      <pose frame=''>1.943579 0.694777 0.5 0 -0 0</pose>
       <link name='link'>
         <inertial>
           <mass>1</mass>
