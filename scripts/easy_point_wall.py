@@ -17,8 +17,8 @@ from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 distance_tolerance = 0.5
-tolerance= 0.01
-
+tolerance= 0.001
+angle_tolerance = 0.01
 max_linear_speed= 0.2
 vel_P = 1
 vel_I = 0
@@ -75,7 +75,7 @@ def angle_difference(angle1, angle2):
 
 class BasicThymio:
 
-    prox_sensors_measure = {'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
+    prox_sensors_measure = {'thymio14/proximity_rear_left_link':0, 'thymio14/proximity_rear_right_link':0, 'thymio14/proximity_right_link': 0, 'thymio14/proximity_center_right_link': 0, 'thymio14/proximity_center_link': 0, 'thymio14/proximity_left_link': 0, 'thymio14/proximity_center_left_link': 0}
 
     def __init__(self, thymio_name):
         """init"""
@@ -92,11 +92,13 @@ class BasicThymio:
                                                 Odometry, self.update_state)
 
         #Subscriber to frontal proximity sensors
-        #self.prox_c = rospy.Subscriber(self.thymio_name + '/proximity/center', Range, self.check_transition)
+        self.prox_c = rospy.Subscriber(self.thymio_name + '/proximity/center', Range, self.check_transition)
         self.prox_cl = rospy.Subscriber(self.thymio_name + '/proximity/center_left', Range, self.check_transition)
         self.prox_l = rospy.Subscriber(self.thymio_name + '/proximity/left', Range, self.check_transition)
         self.prox_cr = rospy.Subscriber(self.thymio_name + '/proximity/center_right', Range, self.check_transition)
         self.prox_r = rospy.Subscriber(self.thymio_name + '/proximity/right', Range, self.check_transition)
+        self.prox_rear_r = rospy.Subscriber(self.thymio_name + '/proximity/rear_left', Range, self.check_transition)
+        self.prox_rear_l = rospy.Subscriber(self.thymio_name + '/proximity/rear_right', Range, self.check_transition)
 
         self.current_pose = Pose()
         self.yaw = 0
@@ -112,10 +114,11 @@ class BasicThymio:
         self.pointer_controller = PID(point_P, point_I, point_D)
         self.dt = 1.0/self.hz
         self.state = WALKING
+        self.from_wall = 0
 
     def check_transition(self, data):
         self.prox_sensors_measure[data.header.frame_id]= data.range
-        if data.range < 0.08 and self.state == WALKING:            
+        if data.range < 0.06 and self.state == WALKING:            
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -209,6 +212,48 @@ class BasicThymio:
         vel_msg.angular.z =0
         self.velocity_publisher.publish(vel_msg)
 
+    def adjust(self):
+        vel_msg = Twist()
+        while (np.abs(self.prox_sensors_measure['thymio14/proximity_rear_left_link'] -  self.prox_sensors_measure['thymio14/proximity_rear_right_link']) > tolerance):
+            error = self.prox_sensors_measure['thymio14/proximity_rear_left_link'] -  self.prox_sensors_measure['thymio14/proximity_rear_right_link'] 
+            rospy.loginfo(error)
+            vel_msg.linear.x = 0
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+
+            vel_msg.angular.x = 0
+            vel_msg.angular.y = 0
+            vel_msg.angular.z = self.pointer_controller.step(error, self.dt)
+            #Publishing our vel_msg
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+        #Stopping our robot after the movement is over
+        vel_msg.linear.x = 0
+        vel_msg.angular.z =0
+        self.velocity_publisher.publish(vel_msg)
+
+    def move2angle(self, goal_angle):
+        vel_msg = Twist()
+
+        while angle_difference(goal_angle, self.yaw) > angle_tolerance:
+            #Porportional Controller
+            #linear velocity in the x-axis: 
+            vel_msg.linear.x = 0
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+
+            #angular velocity in the z-axis:
+            vel_msg.angular.x = 0
+            vel_msg.angular.y = 0
+            vel_msg.angular.z = self.angle_controller.step(angle_difference(goal_angle, self.yaw), self.dt)
+
+            #Publishing our vel_msg
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+        #Stopping our robot after the movement is over
+        vel_msg.linear.x = 0
+        vel_msg.angular.z =0
+        self.velocity_publisher.publish(vel_msg)
 
     def run_thymio(self):
         vel_msg = Twist()
@@ -224,7 +269,10 @@ class BasicThymio:
             self.velocity_publisher.publish(vel_msg)
             self.point_wall()
             self.state = POINTED
-
+        if self.state == POINTED:
+            self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
+            self.move2angle(np.pi+ self.yaw)
+            self.adjust()
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])
