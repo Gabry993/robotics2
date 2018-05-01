@@ -20,6 +20,7 @@ distance_tolerance = 0.5
 tolerance= 0.001
 angle_tolerance = 0.01
 max_linear_speed= 0.2
+max_angular_speed= 3
 vel_P = 1
 vel_I = 0
 vel_D = 0
@@ -32,6 +33,9 @@ point_P = 10
 point_I = 0
 point_D = 0
 
+back_P = 10
+back_I = 0
+back_D = 2
 
 """
 Aux variables for the three states of the angry turtle
@@ -39,6 +43,7 @@ Aux variables for the three states of the angry turtle
 WALKING = W = 0
 TURNING = T = 1
 POINTED = P = 2
+WALKING2M = W2 = 3
 
 
 """
@@ -112,13 +117,14 @@ class BasicThymio:
         #High P for the angular vel makes the turtle turning faster and writing USI simpler
         self.angle_controller = PID(ang_P, ang_I, ang_D)
         self.pointer_controller = PID(point_P, point_I, point_D)
+        self.back_controller = PID(back_P, back_I, back_D)
         self.dt = 1.0/self.hz
         self.state = WALKING
         self.from_wall = 0
 
     def check_transition(self, data):
         self.prox_sensors_measure[data.header.frame_id]= data.range
-        if data.range < 0.06 and self.state == WALKING:            
+        if data.range < 0.04 and self.state == WALKING:            
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -203,7 +209,7 @@ class BasicThymio:
 
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = self.pointer_controller.step(error, self.dt)
+            vel_msg.angular.z = np.clip(self.pointer_controller.step(error, self.dt), -max_angular_speed, max_angular_speed)
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
@@ -223,7 +229,7 @@ class BasicThymio:
 
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = self.pointer_controller.step(error, self.dt)
+            vel_msg.angular.z = np.clip(self.back_controller.step(error, self.dt), -max_angular_speed, max_angular_speed)
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
@@ -245,7 +251,7 @@ class BasicThymio:
             #angular velocity in the z-axis:
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
-            vel_msg.angular.z = self.angle_controller.step(angle_difference(goal_angle, self.yaw), self.dt)
+            vel_msg.angular.z = np.clip(self.angle_controller.step(angle_difference(goal_angle, self.yaw), self.dt), -max_angular_speed, max_angular_speed)
 
             #Publishing our vel_msg
             self.velocity_publisher.publish(vel_msg)
@@ -273,6 +279,15 @@ class BasicThymio:
             self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
             self.move2angle(np.pi+ self.yaw)
             self.adjust()
+            self.state = WALKING2M
+        if self.state == WALKING2M:
+            print("computing new destination")
+            # compute destination position
+            x_n = self.current_pose.position.x + 2*cos(self.yaw)
+            y_n = self.current_pose.position.y + 2*sin(self.yaw)
+            print("start to walk")
+            self.move2goal((x_n, y_n))
+# move to goal
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])
