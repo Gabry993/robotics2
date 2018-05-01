@@ -1,0 +1,11 @@
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall
+
+roslaunch robotics2 thymio_rviz.launch name:=thymio14
+
+rosrun robotics2 basic_move.py thymio14
+
+rosrun robotics2 easy_point_wall_with_odom.py thymio14
+
+export ROS_MASTER_URI=http://thymio14:11311
+
+rosrun rqt_tf_tree rqt_tf_tree
