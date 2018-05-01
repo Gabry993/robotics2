@@ -1,17 +1,17 @@
 #!/usr/bin/env python
-import rospy
-import sys
 
 import numpy as np
-from geometry_msgs.msg import Pose, Twist
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Range
-from math import cos, sin, asin, tan, atan2, radians, atan
+import sys
+from math import cos, sin
+from math import pow, atan2, sqrt
+
+import rospy
 # msgs and srv for working with the set_model_service
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
-from std_srvs.srv import Empty
-from math import pow, atan2, sqrt
+from geometry_msgs.msg import Pose, Twist
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Range
 # a handy tool to convert orientations
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
@@ -37,6 +37,7 @@ Aux variables for the three states of the angry turtle
 WALKING = W = 0
 TURNING = T = 1
 POINTED = P = 2
+WALKING2M = W2 = 3
 
 """
 Useful class to implement a PID controller (as seen in class)
@@ -122,7 +123,7 @@ class BasicThymio:
     def check_transition(self, data):
         self.prox_sensors_measure[data.header.frame_id] = data.range
         if data.range < 0.06 and self.state == WALKING:
-            print("changing  distance: "+str(data.range))
+            print("changing  distance: " + str(data.range))
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -278,6 +279,16 @@ class BasicThymio:
             self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
             self.move2angle(np.pi + self.yaw)
             self.adjust()
+            self.state = WALKING2M
+        if self.state == WALKING2M:
+            print("computing new destination")
+            # compute destination position
+            x_n = self.current_pose.position.x + 2*cos(self.yaw)
+            y_n = self.current_pose.position.y + 2*sin(self.yaw)
+            print("start to walk")
+            self.move2goal((x_n, y_n))
+            # move to goal
+
         '''
         while self.usi_moves_idx<len(self.usi_moves):
                 self.move2goal(self.usi_moves[self.usi_moves_idx])
