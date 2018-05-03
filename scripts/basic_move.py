@@ -182,13 +182,46 @@ class BasicThymio:
         # waiting until shutdown flag (e.g. ctrl+c)
         rospy.spin()
 
+    def open_loop8(self):
+        t = 2*np.pi*1.5/1
+        i=0
+        vel_msg = Twist()
+        while i<570:
+            vel_msg.linear.x = 0.11 # m/s
+            vel_msg.angular.z = 0.11 # rad/s
+            self.velocity_publisher.publish(vel_msg)
+            # .. at the desired rate.
+            i +=1
+            self.rate.sleep()
+            print("gira gira")
+        i=0
+        vel_msg.linear.x = 0 # m/s
+        vel_msg.angular.z = 0 # rad/s
+        self.velocity_publisher.publish(vel_msg)
+        self.rate.sleep()
+        print("stop1")
+        while i<570:
+            vel_msg.linear.x = 0.11 # m/s
+            vel_msg.angular.z = -0.11 # rad/s
+            self.velocity_publisher.publish(vel_msg)
+            # .. at the desired rate.
+            i +=1
+            self.rate.sleep()
+            print("arig arig")
+        i=0
+        vel_msg.linear.x = 0 # m/s
+        vel_msg.angular.z = 0 # rad/s
+        self.velocity_publisher.publish(vel_msg)
+        self.rate.sleep()
+        print("stop 2")
+
     def run_thymio(self):
         t=-90
         while t<1000:
             rad = radians(t)
             scale = 2 / (3 - cos(2*rad));
-            x = 3*scale * cos(rad);
-            y = 3*scale * sin(2*rad) / 2;
+            x = scale * cos(rad);
+            y = scale * sin(2*rad) / 2;
             rospy.loginfo("(x, y): (%.5f, %.5f) " % (x, y))
             self.move2goal((x, y))
             t+=10
@@ -221,6 +254,7 @@ if __name__ == '__main__':
 
     #thymio.basic_move()
     while not rospy.is_shutdown():
-        thymio.run_thymio()
+        #thymio.run_thymio()
+        thymio.open_loop8()
         
 

@@ -6,7 +6,7 @@ import numpy as np
 from geometry_msgs.msg import Pose, Twist
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Range
-from math import cos, sin, asin, tan, atan2, radians, atan
+from math import cos, sin, asin, tan, atan2, radians, atan, isnan
 # msgs and srv for working with the set_model_service
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SetModelState
@@ -20,7 +20,10 @@ distance_tolerance = 0.5
 tolerance= 0.001
 angle_tolerance = 0.01
 max_linear_speed= 0.2
-max_angular_speed= 3
+max_angular_speed= 10
+max_sensor_dist=0.13
+min_sensor_dist=0.01
+
 vel_P = 1
 vel_I = 0
 vel_D = 0
@@ -36,6 +39,8 @@ point_D = 0
 back_P = 10
 back_I = 0
 back_D = 2
+
+wall_distance=4.0 #1.0 = circa 0.5cm
 
 """
 Aux variables for the three states of the angry turtle
@@ -123,8 +128,17 @@ class BasicThymio:
         self.from_wall = 0
 
     def check_transition(self, data):
-        self.prox_sensors_measure[data.header.frame_id]= data.range
-        if data.range < 0.04 and self.state == WALKING:            
+        #print(isnan(data.range))
+        if(data.range==float("inf")):
+            self.prox_sensors_measure[data.header.frame_id]= max_sensor_dist
+            #print("reading inf sensor: "+str(data.header.frame_id)+" value: "+str(data.range))
+        elif(data.range==float("-inf")):
+            self.prox_sensors_measure[data.header.frame_id]= min_sensor_dist
+            #print("reading -inf sensor: "+str(data.header.frame_id)+" value: "+str(data.range))
+        else:
+            self.prox_sensors_measure[data.header.frame_id]= data.range
+
+        if data.range < 0.06 and self.state == WALKING:            
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -203,6 +217,8 @@ class BasicThymio:
         vel_msg = Twist()
         while (np.abs(self.prox_sensors_measure['thymio14/proximity_right_link'] - self.prox_sensors_measure['thymio14/proximity_left_link']) > tolerance):
             error = self.prox_sensors_measure['thymio14/proximity_right_link'] - self.prox_sensors_measure['thymio14/proximity_left_link']
+            error_rear = self.prox_sensors_measure['thymio14/proximity_rear_left_link'] -  self.prox_sensors_measure['thymio14/proximity_rear_right_link'] 
+            #print("VALORECHEPIACE ALDARIO: "+str(error_rear))
             vel_msg.linear.x = 0
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
@@ -222,7 +238,7 @@ class BasicThymio:
         vel_msg = Twist()
         while (np.abs(self.prox_sensors_measure['thymio14/proximity_rear_left_link'] -  self.prox_sensors_measure['thymio14/proximity_rear_right_link']) > tolerance):
             error = self.prox_sensors_measure['thymio14/proximity_rear_left_link'] -  self.prox_sensors_measure['thymio14/proximity_rear_right_link'] 
-            rospy.loginfo(error)
+            print("diff sensors: "+str(error))
             vel_msg.linear.x = 0
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
@@ -270,23 +286,26 @@ class BasicThymio:
             # .. at the desired rate.
             self.rate.sleep()
         if self.state == TURNING:
+            print("-------turning towards the wall")
             vel_msg.linear.x = 0
             vel_msg.angular.z =0
             self.velocity_publisher.publish(vel_msg)
             self.point_wall()
             self.state = POINTED
         if self.state == POINTED:
+            print("-------turning the other way")
             self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
             self.move2angle(np.pi+ self.yaw)
-            self.adjust()
+            #self.adjust()
             self.state = WALKING2M
         if self.state == WALKING2M:
-            print("computing new destination")
+            print("-------computing new destination")
             # compute destination position
-            x_n = self.current_pose.position.x + 2*cos(self.yaw)
-            y_n = self.current_pose.position.y + 2*sin(self.yaw)
-            print("start to walk")
+            x_n = self.current_pose.position.x + (wall_distance-self.from_wall)*cos(self.yaw)
+            y_n = self.current_pose.position.y + (wall_distance-self.from_wall)*sin(self.yaw)
+            print("-------start to walk")
             self.move2goal((x_n, y_n))
+            print("done")
 # move to goal
         '''
         while self.usi_moves_idx<len(self.usi_moves):
@@ -318,6 +337,4 @@ if __name__ == '__main__':
     #thymio.basic_move()
     while not rospy.is_shutdown():
         thymio.run_thymio()
-        sys.exit(1)
-        
-
+        sys.exit(0)
