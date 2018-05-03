@@ -1,0 +1,43 @@
+Task 1
+Is implemented in the file task_1.py
+
+To run task 1 in simulation, first run the command:
+
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=empty
+
+This will launch gazebo with an empty world, then run:
+
+rosrun robotics2 task_1.py thymio14
+
+This will start the task. First thing, it will ask you if you want to use the open loop or closed loop controller.
+As a matter of fact, we implemented both.
+The open loop simply moves the Thymio on 2 circle trajectories, setting the linear and angular speed costantly for a given time.
+The closed loop uses a parametrized function to compute the points that compose an "infinite" shape trajectory. The Thymio then uses two PID controllers to
+set its angular and linear velocity and thus reach each point.
+
+
+Task 2 and 3
+Are both implemented in the file task_2_3.py
+
+To run task 2 and 3 in simulation, first run the command:
+
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall_right (for a wall on the right)
+or
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall_left (for a wall on the left)
+or
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall (for a wall in front)
+
+This will launch gazebo with a wall, then run:
+
+rosrun robotics2 task_2_3.py thymio14
+
+First, it will ask if you are running a simulation or working with the real robot. This will lead to different behaviour (see the report).
+Similarly, it will ask if you want to use an open or closed loop controller for the 180 degree rotation.
+As a matter of fact, here is how it works:
+first, the Thymio moves forward until it reaches the wall (that means that one of the sensor detects something under a given threshold).
+Once it reaches the wall, it turns in place to face the wall orthogonally (it uses a PID to regulate the angular velocity exploiting the difference between the left and right front proximity sensors). (END OF TASK 2)
+Then, it rotates 180 degrees in such a way that it is facing opposite to the wall and finally moves 2 meter forward from the wall.
+Actually, to make the implementation simple, we move the Thymio 2 meter from the wall starting from where the thymio is (so its like 2m + something more).
+This was made to make the open loop move forward implementation easier (is easier to move for 2 meter than for 1.8** meters).
+With the closed loop method, we move forward to a point that is actually 2 meter from the wall. As a matter of fact, we compute a point in the world reference frame
+taking into consideration the distance of the thymio from the wall.
