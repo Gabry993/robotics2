@@ -22,8 +22,8 @@ angle_tolerance = 0.01      #angle tolerance from goal angle for move2angle
 wall_threshold = 0.07       #threshold to stop the Thymio when a wall is detected
 max_linear_speed= 0.14      #max thymio linear speed
 max_angular_speed= 3        #max Thymio angular speed
-max_sensor_dist=0.13        #max distance detected by sensor (used to raplace inf in real world)
-min_sensor_dist=0.01        #min distance detected by sensor (used to raplace -inf in real world)
+max_sensor_dist=0.13        #max distance detected by sensor (used to replace inf in real world)
+min_sensor_dist=0.01        #min distance detected by sensor (used to replace -inf in real world)
 
 #Parameter for linear velocity PID Controller
 vel_P = 1
@@ -31,7 +31,7 @@ vel_I = 0
 vel_D = 0
 
 #Parameter for angular velocity PID Controller
-ang_P = 10
+ang_P = 5
 ang_I = 0
 ang_D = 0
 
@@ -41,12 +41,12 @@ point_I = 0
 point_D = 0
 
 #Parameter for the PID Controller that controlls angular speed with respect to the difference between 2 rear proximity sensors
-back_P = 10
-back_I = 0
-back_D = 2
+back_P = 5
+back_I = 5
+back_D = 0
 
 #Used to move 2m away from the wall
-wall_distance=2.5 #1.0 = circa 0.5cm
+wall_distance=2.5
 
 """
 Aux variables for the states of the Thymio
@@ -150,7 +150,7 @@ class BasicThymio:
         else:
             self.prox_sensors_measure[data.header.frame_id]= data.range
 
-        if data.range < wall_threshold and self.state == WALKING:            
+        if data.range < wall_threshold and self.state == WALKING:# and (data.header.frame_id == 'thymio14/proximity_right_link' or data.header.frame_id == 'thymio14/proximity_left_link'):            
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -327,9 +327,10 @@ class BasicThymio:
 
     #Run the thymio with the desired parameters
     #real: True if we are working with the real Thymio, Falsefor the  simulator
-    #open_loop: True if we want to use open_loop rotation or closed_loop + adjust. True is better for real Thymio, False for the simulator
-    
-    def run_thymio(self, real=False, open_loop=False):
+    #open_loop_rotation: True if we want to use open_loop rotation or closed_loop + adjust. True is better for real Thymio, False for the simulator
+    #open_loop_walK: True if we want to use open_loop walk or closed_loop for 2m. True is better for real Thymio, False for the simulator
+
+    def run_thymio(self, real=False, open_loop_rotation=False, open_loop_walk = False):
         vel_msg = Twist()
         vel_msg.linear.x = 0.1 # m/s
         vel_msg.angular.z = 0. # rad/s
@@ -347,25 +348,31 @@ class BasicThymio:
         if self.state == POINTED:
             print("-------turning the other way")
             self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
-            if not real and not open_loop:
+            if not real and not open_loop_rotation:
+                print("here")
                 self.move2angle(np.pi+ self.yaw)
                 self.adjust()
-            elif not real and open_loop:
+            elif not real and open_loop_rotation:
+                print("here2")
                 self.turn180_magic()
                 self.adjust()
-            elif real and not open_loop:
+            elif real and not open_loop_rotation:
+                print("here3")
                 self.move2angle(np.pi+ self.yaw)
             else:
+                print("here4")
                 self.turn180_magic()
             self.state = WALKING2M
         if self.state == WALKING2M:
             print("-------computing new destination")
+            if not open_loop_walk:
             # compute destination position
-            '''x_n = self.current_pose.position.x + (wall_distance-self.from_wall)*cos(self.yaw)
-            y_n = self.current_pose.position.y + (wall_distance-self.from_wall)*sin(self.yaw)
-            print("-------start to walk")
-            self.move2goal((x_n, y_n))'''
-            self.open_dritto()
+                x_n = self.current_pose.position.x + (wall_distance-self.from_wall)*cos(self.yaw)
+                y_n = self.current_pose.position.y + (wall_distance-self.from_wall)*sin(self.yaw)
+                print("-------start to walk")
+                self.move2goal((x_n, y_n))
+            else:
+                self.open_dritto()
             print("done")
 
 def usage():
@@ -380,16 +387,21 @@ if __name__ == '__main__':
         sys.exit(1)
     thymio = BasicThymio(thymio_name)
 
-    real = raw_input("Are you working with the real thymio? y or n\n")
+    real = raw_input("Are you working with the real thymio? y or n (n is the best for simulation)\n")
     if real == "y":
         real = True
     else:
         real = False
-    open_loop = raw_input("Do you want open loop rotation? y or n\n")
-    if open_loop == "y":
-        open_loop = True
+    open_loop_rotation = raw_input("Do you want open loop rotation? y or n (n is the best for simulation)\n")
+    if open_loop_rotation == "y":
+        open_loop_rotation = True
     else:
-        open_loop = False
+        open_loop_rotation = False
+    open_loop_walk = raw_input("Do you want open loop 2m walk? y or n (n is the best for simulation)\n")
+    if open_loop_walk == "y":
+        open_loop_walk = True
+    else:
+        open_loop_walk = False
     while not rospy.is_shutdown():
-        thymio.run_thymio(real, open_loop)
+        thymio.run_thymio(real, open_loop_rotation, open_loop_walk)
         sys.exit(0)
