@@ -186,9 +186,9 @@ class BasicThymio:
         t = 2*np.pi*1.5/1
         i=0
         vel_msg = Twist()
-        while i<570:
+        while i<286:
             vel_msg.linear.x = 0.11 # m/s
-            vel_msg.angular.z = 0.11 # rad/s
+            vel_msg.angular.z = 0.22 # rad/s
             self.velocity_publisher.publish(vel_msg)
             # .. at the desired rate.
             i +=1
@@ -200,9 +200,9 @@ class BasicThymio:
         self.velocity_publisher.publish(vel_msg)
         self.rate.sleep()
         print("stop1")
-        while i<570:
+        while i<285:
             vel_msg.linear.x = 0.11 # m/s
-            vel_msg.angular.z = -0.11 # rad/s
+            vel_msg.angular.z = -0.22 # rad/s
             self.velocity_publisher.publish(vel_msg)
             # .. at the desired rate.
             i +=1
