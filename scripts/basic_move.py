@@ -186,9 +186,9 @@ class BasicThymio:
         t = 2*np.pi*1.5/1
         i=0
         vel_msg = Twist()
-        while i<286:
+        while i<75:
             vel_msg.linear.x = 0.11 # m/s
-            vel_msg.angular.z = 0.22 # rad/s
+            vel_msg.angular.z = 1 # rad/s
             self.velocity_publisher.publish(vel_msg)
             # .. at the desired rate.
             i +=1
@@ -200,9 +200,9 @@ class BasicThymio:
         self.velocity_publisher.publish(vel_msg)
         self.rate.sleep()
         print("stop1")
-        while i<285:
+        while i<75:
             vel_msg.linear.x = 0.11 # m/s
-            vel_msg.angular.z = -0.22 # rad/s
+            vel_msg.angular.z = -1 # rad/s
             self.velocity_publisher.publish(vel_msg)
             # .. at the desired rate.
             i +=1
@@ -253,8 +253,8 @@ if __name__ == '__main__':
     #rospy.sleep(1.)
 
     #thymio.basic_move()
-    while not rospy.is_shutdown():
+    #while not rospy.is_shutdown():
         #thymio.run_thymio()
-        thymio.open_loop8()
+    thymio.open_loop8()
         
 

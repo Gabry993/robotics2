@@ -20,7 +20,7 @@ distance_tolerance = 0.5
 tolerance= 0.001
 angle_tolerance = 0.01
 max_linear_speed= 0.2
-max_angular_speed= 10
+max_angular_speed= 3
 max_sensor_dist=0.13
 min_sensor_dist=0.01
 
@@ -28,7 +28,7 @@ vel_P = 1
 vel_I = 0
 vel_D = 0
 
-ang_P = 2
+ang_P = 10
 ang_I = 0
 ang_D = 0
 
@@ -40,7 +40,7 @@ back_P = 10
 back_I = 0
 back_D = 2
 
-wall_distance=4.0 #1.0 = circa 0.5cm
+wall_distance=2.5 #1.0 = circa 0.5cm
 
 """
 Aux variables for the three states of the angry turtle
@@ -126,6 +126,17 @@ class BasicThymio:
         self.dt = 1.0/self.hz
         self.state = WALKING
         self.from_wall = 0
+    def turn180_magic(self):
+        i=0
+        vel_msg = Twist()
+        while i<30:
+            vel_msg.linear.x = 0 # m/s
+            vel_msg.angular.z = 1 # rad/s
+            self.velocity_publisher.publish(vel_msg)
+            # .. at the desired rate.
+            i +=1
+            self.rate.sleep()
+            print("gira gira")
 
     def check_transition(self, data):
         #print(isnan(data.range))
@@ -138,7 +149,7 @@ class BasicThymio:
         else:
             self.prox_sensors_measure[data.header.frame_id]= data.range
 
-        if data.range < 0.06 and self.state == WALKING:            
+        if data.range < 0.07 and self.state == WALKING:            
             self.state = TURNING
 
     def thymio_state_service_request(self, position, orientation):
@@ -277,6 +288,20 @@ class BasicThymio:
         vel_msg.angular.z =0
         self.velocity_publisher.publish(vel_msg)
 
+    def open_dritto(self):
+        i=0
+        vel_msg = Twist()
+        while i<200:
+            vel_msg.linear.x = 0.10 # m/s
+            vel_msg.angular.z = 0 # rad/s
+            self.velocity_publisher.publish(vel_msg)
+            # .. at the desired rate.
+            i +=1
+            self.rate.sleep()
+        vel_msg.linear.x = 0
+        vel_msg.angular.z =0
+        self.velocity_publisher.publish(vel_msg)
+
     def run_thymio(self):
         vel_msg = Twist()
         vel_msg.linear.x = 0.1 # m/s
@@ -295,16 +320,18 @@ class BasicThymio:
         if self.state == POINTED:
             print("-------turning the other way")
             self.from_wall = self.prox_sensors_measure['thymio14/proximity_center_link']
-            self.move2angle(np.pi+ self.yaw)
+            #self.move2angle(np.pi+ self.yaw)
             #self.adjust()
+            self.turn180_magic()
             self.state = WALKING2M
         if self.state == WALKING2M:
             print("-------computing new destination")
             # compute destination position
-            x_n = self.current_pose.position.x + (wall_distance-self.from_wall)*cos(self.yaw)
+            '''x_n = self.current_pose.position.x + (wall_distance-self.from_wall)*cos(self.yaw)
             y_n = self.current_pose.position.y + (wall_distance-self.from_wall)*sin(self.yaw)
             print("-------start to walk")
-            self.move2goal((x_n, y_n))
+            self.move2goal((x_n, y_n))'''
+            self.open_dritto()
             print("done")
 # move to goal
         '''
