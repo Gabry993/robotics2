@@ -1,3 +1,6 @@
+#launch gazebo with with an empty world
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=empty
+
 #launch gazebo with wall in front of the thymio
 roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall
 
