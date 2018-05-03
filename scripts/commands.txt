@@ -1,10 +1,22 @@
+#launch gazebo with wall in front of the thymio
 roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall
 
+#launch gazebo with wall to the right of the thymio
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall_right
+
+#launch gazebo with wall to the left of the thymio
+roslaunch robotics2 thymio_gazebo_bringup.launch name:=thymio14 world:=wall_left
+
+
+#launch rviz
 roslaunch robotics2 thymio_rviz.launch name:=thymio14
 
-rosrun robotics2 basic_move.py thymio14
+#run task 1. It will ask you if you want the open or closed loop controller
+rosrun robotics2 task_1.py thymio14
 
-rosrun robotics2 easy_point_wall_with_odom.py thymio14
+#run task 2. It will ask you if you are with the real thymio or gazebo and if you want the open or closed loop controller for the rotation
+
+rosrun robotics2 task_2_3.py thymio14
 
 export ROS_MASTER_URI=http://thymio14:11311
 
